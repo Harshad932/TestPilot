@@ -1,7 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+
 import testCaseGeneratorRoutes from './routes/TestCaseGeneratorRoutes.js';
+import docBasedGeneratorRoutes from './routes/DocBasedGeneratorRoutes.js';
 
 dotenv.config();
 const app=express();
@@ -13,6 +15,7 @@ app.use(cors());
 app.use(express.json());
 
 app.use('/api/testcase', testCaseGeneratorRoutes);
+app.use('/api/doc', docBasedGeneratorRoutes);
 
 app.get('/', (req, res) => {
     res.send('Welcome to TestPilot API! 🚀');
