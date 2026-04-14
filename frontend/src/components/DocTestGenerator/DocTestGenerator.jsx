@@ -265,7 +265,7 @@ export default function DocTestGenerator() {
         formData.append("focusQuery", focusQuery.trim());
       }
 
-      const res = await fetch(`${BACKEND_URL}/api/generate-from-doc`, {
+      const res = await fetch(`${BACKEND_URL}/api/doc/generate`, {
         method: "POST",
         body: formData,
       });

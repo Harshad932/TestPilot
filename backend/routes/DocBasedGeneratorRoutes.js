@@ -1,9 +1,9 @@
 import express from 'express';
 
-import { generateDocBasedTest } from '../controllers/DocBasedGenerator.js';
+import {upload, generateDocBasedTest } from '../controllers/DocBasedGenerator.js';
 
 const router=express.Router();
 
-router.post('/generate', generateDocBasedTest);
+router.post('/generate',upload.single("file"), generateDocBasedTest);
 
 export default router;
