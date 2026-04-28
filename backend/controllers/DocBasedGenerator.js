@@ -2,9 +2,6 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
-import { HuggingFaceInferenceEmbeddings } from "@langchain/community/embeddings/hf";
-import { MemoryVectorStore } from "langchain/vectorstores/memory";
-import { Document } from "@langchain/core/documents";
 import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
 import groqService from "../services/groqService.js";
 
@@ -28,6 +25,44 @@ export const upload = multer({
   fileFilter,
   limits: { fileSize: 5 * 1024 * 1024 },
 });
+
+
+function scoreChunks(chunks, query) {
+  const queryWords = query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => w.length > 2); 
+
+  return chunks
+    .map((chunk, index) => {
+      const lower = chunk.toLowerCase();
+      const score = queryWords.reduce(
+        (acc, word) => acc + (lower.includes(word) ? 1 : 0),
+        0
+      );
+      return { chunk, index, score };
+    })
+    .sort((a, b) => b.score - a.score || a.index - b.index);
+}
+
+function selectContext(chunks, focusQuery, maxChars = 6000) {
+  const fullText = chunks.join("\n\n");
+  if (fullText.length <= maxChars) {
+    return fullText;
+  }
+
+  const scored = scoreChunks(chunks, focusQuery);
+  let context = "";
+  let charsUsed = 0;
+
+  for (const { chunk } of scored) {
+    if (charsUsed + chunk.length > maxChars) break;
+    context += `\n\n${chunk}`;
+    charsUsed += chunk.length;
+  }
+
+  return context.trim();
+}
 
 export const generateDocBasedTest = async (req, res) => {
   const filePath = req.file?.path;
@@ -63,24 +98,11 @@ export const generateDocBasedTest = async (req, res) => {
 
     const chunks = await splitter.splitText(cleanedText);
 
-    const docs = chunks.map((chunk) => new Document({ pageContent: chunk }));
-
-    const embeddings = new HuggingFaceInferenceEmbeddings({
-      apiKey: process.env.HUGGINGFACE_API_KEY,
-      model: "sentence-transformers/all-MiniLM-L6-v2",
-    });
-
-    const vectorStore = await MemoryVectorStore.fromDocuments(docs, embeddings);
-
     const focusQuery =
       req.body?.focusQuery?.trim() ||
       "generate test cases for this document";
 
-    const relevantDocs = await vectorStore.similaritySearch(focusQuery, 5);
-
-    const context = relevantDocs
-      .map((doc, i) => `[Chunk ${i + 1}]: ${doc.pageContent}`)
-      .join("\n\n");
+    const context = selectContext(chunks, focusQuery);
 
     const testCases = await groqService.generateDocBasedTestCases(
       context,
@@ -89,10 +111,12 @@ export const generateDocBasedTest = async (req, res) => {
 
     return res.status(200).json(testCases);
   } catch (err) {
+    console.error("generateDocBasedTest error:", err);
+
     if (err instanceof SyntaxError) {
-      return res
-        .status(500)
-        .json({ error: "Failed to parse AI response as JSON. Please try again." });
+      return res.status(500).json({
+        error: "Failed to parse AI response as JSON. Please try again.",
+      });
     }
     return res
       .status(500)

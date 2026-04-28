@@ -4,6 +4,6 @@ import {upload, generateDocBasedTest } from '../controllers/DocBasedGenerator.js
 
 const router=express.Router();
 
-router.post('/generate',upload.single("file"), generateDocBasedTest);
+router.post('/generate', upload.single("document"), generateDocBasedTest);
 
 export default router;
